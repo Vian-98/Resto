@@ -1,28 +1,28 @@
 # Sistem Pemesanan Restoran (RestoApp)
 
 > **Tugas Praktik Demonstrasi Sertifikasi Programmer — BNSP**  
-> Dibuat dengan arsitektur terstruktur dan berorientasi objek (OOP), memanfaatkan library pre-existing, serta memenuhi seluruh kriteria unjuk kerja unit kompetensi BNSP.
+> Dibuat dengan arsitektur terstruktur dan berorientasi objek (OOP), memanfaatkan library pre-existing, serta memenuhi seluruh kriteria unjuk kerja 9 Unit Kompetensi Skema Pemrogram (Programmer) KKNI Level 4.
 
 ---
 
 ## 1. Ringkasan Proyek
 
-Aplikasi web sederhana untuk staf restoran yang mencakup fungsionalitas:
+Aplikasi web untuk staf restoran yang mencakup fungsionalitas:
 - **Pengelolaan Data Master**: Pelanggan, Meja, dan Menu (CRUD).
-- **Pemesanan Meja**: Reservasi meja dengan validasi bentrok jadwal dan validasi kapasitas tamu.
-- **Rincian Item Pesanan**: Menambahkan pesanan menu ke reservasi dengan perhitungan total otomatis.
-- **Ubah Status**: Dipesan &rarr; Selesai / Dibatalkan.
-- **Laporan & Export PDF**: Rekapitulasi transaksi dan pendapatan per rentang tanggal serta cetak PDF.
+- **Pemesanan Meja**: Reservasi meja dengan validasi bertingkat (kapasitas tamu & bentrok jadwal).
+- **Rincian Item Pesanan**: Menambahkan hidangan menu ke reservasi dengan kalkulasi subtotal dan grand total otomatis (`COALESCE(SUM(subtotal), 0)`).
+- **Manajemen Status Transaksi**: Menunggu &rarr; Dipesan &rarr; Selesai / Dibatalkan.
+- **Laporan & Ekspor PDF**: Rekapitulasi transaksi dan omset per rentang tanggal serta cetak dokumen resmi format PDF (Dompdf).
+- **Pengujian Unit Otomatis**: Unit testing menggunakan PHPUnit 11 (8 skenario pengujian, 15 assertions lolos 100%).
 
 ---
 
 ## 2. Diagram Arsitektur & Pemodelan Sistem (J.620100.009.01)
 
-Sistem dimodelkan secara visual mencakup relasi basis data, arsitektur kelas OOP, dan flowchart logika terstruktur:
-> 💡 **Format Draw.io (`.drawio`) Siap Edit:** Seluruh diagram tersedia dalam format asli yang dapat langsung dibuka dan diedit di [app.diagrams.net](https://app.diagrams.net) melalui master berkas [**`semua_diagram_restoran.drawio`**](file:///Users/favian/Proyek%20/sertifikasi%20bnsp/docs/diagrams/semua_diagram_restoran.drawio) (multi-page) atau berkas per diagram. Panduan lengkap tersedia di [`docs/diagrams/DIAGRAM_SOURCE_CODE.md`](file:///Users/favian/Proyek%20/sertifikasi%20bnsp/docs/diagrams/DIAGRAM_SOURCE_CODE.md).
+Sistem dimodelkan secara visual mencakup relasi basis data, arsitektur kelas OOP, use case, flowchart, dan activity diagram:
 
 ### 2.1 Entity Relationship Diagram (ERD Basis Data)
-Ternormalisasi 3NF dengan 5 tabel utama pada MySQL InnoDB:
+Ternormalisasi 3NF dengan 5 tabel relasional pada MySQL InnoDB:
 ```
 [pelanggan] (1) <─────── (N) [pemesanan] (1) <─────── (N) [detail_pesanan] (N) ───────> (1) [menu]
                                   │
@@ -30,7 +30,11 @@ Ternormalisasi 3NF dengan 5 tabel utama pada MySQL InnoDB:
                                   │
                               (1) [meja]
 ```
-> *Berkas diagram visual:* [erd_diagram.png](file:///Users/favian/Proyek%20/sertifikasi%20bnsp/docs/diagrams/erd_diagram.png)
+- **`pelanggan`**: Menyimpan identitas pelanggan (`id`, `nama`, `telepon`, `email`, `alamat`).
+- **`meja`**: Data fisik meja restoran (`id`, `nomor_meja`, `kapasitas`, `status`).
+- **`menu`**: Katalog kuliner dan status ketersediaan (`id`, `nama_menu`, `kategori`, `harga`, `status`).
+- **`pemesanan`**: Transaksi reservasi (`id`, `pelanggan_id`, `meja_id`, `waktu_pesan`, `jumlah_tamu`, `total`, `status`). Dilengkapi indeks komposit `idx_meja_waktu(meja_id, waktu_pesan)`.
+- **`detail_pesanan`**: Relasi item menu pada reservasi (`id`, `pemesanan_id`, `menu_id`, `jumlah`, `harga_satuan`, `subtotal`).
 
 ### 2.2 UML Class Diagram (Paradigma OOP)
 Penerapan Abstract Class `BaseModel`, Pewarisan (`Pelanggan`, `Meja`, `Menu`), Enkapsulasi `Pemesanan`, dan Singleton `Database`:
@@ -46,19 +50,33 @@ Penerapan Abstract Class `BaseModel`, Pewarisan (`Pelanggan`, `Meja`, `Menu`), E
 │ Pelanggan       │ │ Meja            │ │ Menu            │
 └─────────────────┘ └─────────────────┘ └─────────────────┘
 ```
-> *Berkas diagram visual:* [class_diagram.png](file:///Users/favian/Proyek%20/sertifikasi%20bnsp/docs/diagrams/class_diagram.png)
 
 ### 2.3 Flowchart Alur Reservasi & Validasi Terstruktur (J.620100.017.02)
-Mulai &rarr; Input Reservasi &rarr; Validasi Kapasitas Meja &rarr; Cek Bentrok Jadwal &rarr; Simpan &rarr; Input Pesanan Menu &rarr; Hitung Total Otomatis &rarr; Selesai / Laporan PDF.
-> *Berkas diagram visual:* [flowchart_diagram.png](file:///Users/favian/Proyek%20/sertifikasi%20bnsp/docs/diagrams/flowchart_diagram.png)
+Alur transaksi sistem:
+1. Mulai &rarr; Buka form reservasi meja.
+2. Input data pemesanan (Pelanggan, Meja, Tanggal/Waktu, Jumlah Tamu).
+3. **Pengecekan Kapasitas Tamu**: Apakah `jumlah_tamu <= kapasitas_meja`?
+   - *Tidak*: Tampilkan peringatan kapasitas, kunci tombol simpan, kembali ke input untuk koreksi.
+   - *Ya*: Lanjut ke pengecekan jadwal.
+4. **Pengecekan Bentrok Jadwal**: Apakah meja sudah memiliki reservasi aktif di jam tersebut (`WHERE status != 'Dibatalkan'`)?
+   - *Bentrok*: Tampilkan notifikasi jadwal tidak tersedia, arahkan koreksi waktu/meja.
+   - *Tersedia*: Tombol simpan aktif.
+5. Simpan data reservasi ke tabel `pemesanan` dengan status `'Dipesan'`.
+6. Buka halaman detail pesanan &rarr; Input hidangan menu &rarr; Sistem menghitung subtotal & grand total.
+7. Cetak bukti / Laporan PDF &rarr; Selesai.
 
 ### 2.4 UML Use Case Diagram (Identifikasi Kebutuhan & Aktor)
-Mendefinisikan batasan sistem (*System Boundary*), aktor operasional (**Staf Pelayan / Kasir**: Mendaftarkan Tamu, Melakukan Reservasi, Mencatat Pesanan Menu, Memperbarui Status) dan aktor manajerial (**Manajer Restoran**: Mengatur Meja, Mengatur Menu, Memantau Laporan Penjualan). Dilengkapi relasi wajib `<<include>>` (Memeriksa Ketersediaan Meja, Memvalidasi Kapasitas, Menghitung Total Biaya, Menyaring Periode Tanggal) dan relasi opsional `<<extend>>` (Mengekspor Laporan ke PDF). Seluruh *use case* diawali kata kerja aktif (*action verbs*) sesuai alur operasional restoran nyata.
-> *Berkas diagram visual:* [use_case_diagram.png](file:///Users/favian/Proyek%20/sertifikasi%20bnsp/docs/diagrams/use_case_diagram.png)
+Mendefinisikan batasan sistem (*System Boundary*), dengan 1 aktor utama (**Staf Restoran**) yang memiliki akses pada 4 fungsi operasional:
+1. **Catat Pesanan & Pembayaran**: Mencatat reservasi meja pelanggan, input pesanan hidangan, kalkulasi total otomatis, serta pencetakan bukti nota pembayaran.
+2. **Kelola Meja**: Melakukan operasi CRUD (Tambah, Ubah, Hapus) nomor meja dan kapasitas kursi tamu.
+3. **Kelola Menu & Stok**: Mengelola katalog makanan dan minuman, harga satuan (Rp), serta status ketersediaan stok (Tersedia / Habis).
+4. **Cetak Laporan Keuangan**: Menyaring riwayat transaksi per rentang tanggal dan mengekspor dokumen rekapitulasi penjualan resmi ke format PDF.
 
-### 2.5 UML Activity Diagram (Alur Transaksi Lintas Swimlane)
-Visualisasi alur aktivitas lintas swimlane (Pengguna, Sistem Logika Bisnis, dan Basis Data MySQL) mulai dari input reservasi, validasi bertingkat, query jadwal, hingga penyimpanan detail item pesanan.
-> *Berkas diagram visual:* [activity_diagram.png](file:///Users/favian/Proyek%20/sertifikasi%20bnsp/docs/diagrams/activity_diagram.png)
+### 2.5 UML Activity Diagram (Alur Transaksi & Validasi Bertingkat)
+Memodelkan aktivitas lintas 3 swimlane (**Staf Restoran**, **Sistem RestoApp**, dan **Basis Data MySQL**):
+- **Tahap 1 (Validasi Kapasitas)**: Memeriksa apakah jumlah tamu melebihi kapasitas meja (`validasiKapasitas()`). Jika melebihi, sistem secara reaktif menampilkan alert peringatan, border merah, dan mengunci tombol submit.
+- **Tahap 2 (Validasi Jadwal)**: Memeriksa bentrok waktu reservasi pada meja terpilih via kueri `WHERE meja_id = :meja_id AND waktu_pesan = :waktu_pesan AND status != 'Dibatalkan'`. Jika jadwal aman, badge hijau aktif dan tombol reservasi terbuka.
+- **Simpan & Rincian Pesanan**: Status awal dicatat `'Dipesan'`. Staf dapat menambahkan item menu dengan kalkulasi subtotal otomatis dan penggabungan kuantitas (*merge quantity*) jika menu yang sama ditambahkan berulang kali.
 
 ---
 
@@ -66,38 +84,47 @@ Visualisasi alur aktivitas lintas swimlane (Pengguna, Sistem Logika Bisnis, dan 
 
 ```
 restoran/
-├── berkas_bnsp/                # 3 Berkas deliverable resmi yang dikumpulkan ke Asesor
+├── berkas_bnsp/                # Berkas deliverable resmi sertifikasi BNSP
 │   ├── 1_Lampiran_Koding_Sistem_Pemesanan_Restoran.docx
 │   ├── 2_Laporan_Pengembangan_Sistem_Pemesanan_Restoran.docx
-│   └── 3_Slide_Presentasi_Demonstrasi_BNSP.pptx
+│   ├── 3_Slide_Presentasi_Demonstrasi_BNSP.pptx
+│   └── Lampiran_Tangkapan_Layar_Sistem.docx # Lampiran 13 tangkapan layar & pengujian
 ├── composer.json               # Konfigurasi dependensi library (Dompdf, PHPUnit)
 ├── composer.lock               # Lockfile dependensi
 ├── phpunit.xml                 # Konfigurasi test suite PHPUnit
 ├── README.md                   # Dokumentasi lengkap & laporan teknis proyek
 ├── database/
 │   └── schema.sql              # DDL basis data MySQL (5 tabel, FK, indeks, & seed data)
-├── docs/                       # Dokumen pendukung & diagram arsitektur
-│   ├── diagrams/               # Berkas PNG resolusi tinggi (ERD, Class, Flowchart)
-│   └── spesifikasi/            # Berkas acuan & rujukan spesifikasi BNSP
+├── docs/                       # Dokumen pendukung & panduan asesmen BNSP
+│   └── KUNCI_JAWABAN_ASESMEN_BNSP.md # Panduan komprehensif tanya-jawab 9 unit SKKNI
 ├── logs/
 │   └── app.log                 # Catatan aktivitas & penanganan error aplikasi
 ├── public/                     # Tampilan antarmuka web (UI)
-│   ├── assets/css/style.css    # Desain antarmuka modern & nyaman
-│   ├── header.php              # Header & navigasi Bootstrap 5
+│   ├── assets/css/style.css    # Desain antarmuka modern, responsif & interaktif
+│   ├── header.php              # Header & navigasi navbar
 │   ├── footer.php              # Footer template
-│   ├── index.php               # Dashboard ringkasan & statistik
-│   ├── pelanggan.php           # CRUD Data Pelanggan (F-01)
-│   ├── meja.php                # CRUD Data Meja Restoran (F-02)
-│   ├── menu.php                # CRUD Data Menu Makanan/Minuman (F-03)
-│   ├── pemesanan.php           # Buat & kelola status pemesanan meja (F-04, F-06, F-07)
-│   ├── detail_pesanan.php      # Tambah item menu ke pemesanan & hitung subtotal (F-05)
+│   ├── index.php               # Dashboard ringkasan & statistik (F-01)
+│   ├── pelanggan.php           # CRUD Data Pelanggan (F-02)
+│   ├── meja.php                # CRUD Data Meja Restoran (F-03)
+│   ├── menu.php                # CRUD Data Menu Makanan/Minuman (F-04)
+│   ├── pemesanan.php           # Buat reservasi meja & validasi 2 tahap (F-05, F-06)
+│   ├── detail_pesanan.php      # Tambah item menu ke pemesanan & hitung subtotal (F-07)
 │   └── laporan.php             # Laporan filter tanggal & export PDF via Dompdf (F-08)
-├── scripts/                    # Skrip automasi Python untuk membangun dokumen
-│   ├── build_docs.sh           # Runner regenerasi seluruh berkas sekaligus
-│   ├── generate_diagrams.py    # Generator gambar diagram (Pillow)
-│   ├── generate_docx.py        # Generator laporan pengembangan .docx
-│   ├── generate_lampiran_koding.py # Generator berkas lampiran koding .docx
-│   └── generate_pptx.py        # Generator slide presentasi .pptx
+├── screenshots/                # 13 Bukti tangkapan layar antarmuka & pengujian sistem
+│   ├── 01_dashboard.png
+│   ├── 02_kelola_meja.png
+│   ├── 03_kelola_menu.png
+│   ├── 04_kelola_pelanggan.png
+│   ├── 05_daftar_pemesanan.png
+│   ├── 06_detail_pesanan.png
+│   ├── 07_laporan_transaksi.png
+│   ├── 08_modal_validasi_kapasitas.png
+│   ├── 09_modal_jadwal_tersedia.png
+│   ├── 10_hasil_laporan_pdf.png
+│   ├── 11_terminal_phpunit.png
+│   ├── 12_terminal_php_lint.png
+│   └── 13_database_struktur_tabel.png
+├── scripts/                    # Skrip generator dokumen & lampiran Word
 ├── src/                        # Logika bisnis & kelas program
 │   ├── Database.php            # Koneksi PDO (Encapsulation, Singleton, try-catch)
 │   ├── helpers.php             # Fungsi prosedural terstruktur (format rupiah, sanitasi input, log)
@@ -117,12 +144,12 @@ restoran/
 
 ### Kebutuhan:
 - PHP 8.1 atau lebih baru (dengan ekstensi `pdo_mysql`, `mbstring`, `gd`)
-- MySQL / MariaDB (misalnya via aplikasi **DBngin** pada port 3306)
+- MySQL 8.0 / MariaDB (misalnya via aplikasi **DBngin** pada port 3306)
 - Composer
 
-### Langkah Instalasi:
+### Langkah Instalasi & Menjalankan:
 
-1. **Clone / Buka Direktori Proyek**:
+1. **Buka Direktori Proyek**:
    ```bash
    cd "/Users/favian/Proyek /sertifikasi bnsp"
    ```
@@ -133,7 +160,7 @@ restoran/
    ```
 
 3. **Import Basis Data**:
-   Pastikan MySQL di DBngin aktif (Port 3306, User: `root`, Password: kosong). Import file `database/schema.sql`:
+   Pastikan MySQL aktif (Port 3306, User: `root`, Password: kosong). Import file `database/schema.sql`:
    ```bash
    php -r '
    $sql = file_get_contents("database/schema.sql");
@@ -143,24 +170,24 @@ restoran/
    '
    ```
 
-4. **Jalankan Web Server**:
+4. **Jalankan Web Server Lokal**:
    ```bash
    php -S 127.0.0.1:8000 -t public
    ```
-   Buka browser di: [http://127.0.0.1:8000](http://127.0.0.1:8000)
+   Akses aplikasi di browser: [http://127.0.0.1:8000](http://127.0.0.1:8000)
 
 ---
 
-## 5. Pengujian Unit Program (PHPUnit)
+## 5. Pengujian Unit Program & Kualitas Kode
 
+### 5.1 Eksekusi Pengujian Otomatis (PHPUnit)
 Pengujian mencakup **8 skenario** sesuai spesifikasi PRD (kasus normal, edge case, validasi error, dan akumulasi menu duplikat):
 
-Jalankan perintah:
 ```bash
-vendor/bin/phpunit
+./vendor/bin/phpunit
 ```
 
-### Hasil Pengujian:
+**Hasil Pengujian:**
 ```text
 PHPUnit 11.5.57 by Sebastian Bergmann and contributors.
 
@@ -169,7 +196,7 @@ Configuration: /Users/favian/Proyek /sertifikasi bnsp/phpunit.xml
 
 ........                                                            8 / 8 (100%)
 
-Time: 00:00.081, Memory: 8.00 MB
+Time: 00:00.026, Memory: 8.00 MB
 
 OK (8 tests, 15 assertions)
 ```
@@ -185,21 +212,28 @@ OK (8 tests, 15 assertions)
 | **T-07** | `validasi_input()` | Input string kosong / hanya spasi | Ditolak (`false`) | **LULUS** |
 | **T-08** | `Pemesanan::tambahItem()` | Menu sama dipesan berulang (duplikat) | Kuantitas digabung/merge, tidak terduplikasi | **LULUS** |
 
+### 5.2 Pemeriksaan Sintaksis Statis (PHP Lint)
+Memastikan seluruh berkas bebas syntax error:
+```bash
+find src public -name "*.php" -exec php -l {} \;
+```
+*Hasil: Seluruh berkas berstatus `No syntax errors detected` (Zero Error).*
+
 ---
 
-## 6. Pemetaan ke Unit Kompetensi BNSP
+## 6. Pemetaan ke 9 Unit Kompetensi BNSP (KKNI Level 4)
 
 | Kode Unit | Judul Unit Kompetensi | Bukti Implementasi di Proyek |
 | :--- | :--- | :--- |
-| **J.620100.009.01** | Menggunakan Spesifikasi Program | Kode dibangun persis mengacu pada PRD, ERD, dan spesifikasi tabel relasi di `database/schema.sql`. |
-| **J.620100.016.01** | Menulis Kode Sesuai Guidelines & Best Practices | Sesuai standar PSR-12, penamaan camelCase/PascalCase, 1 kelas per file, fungsi modular pendek, sanitasi `htmlspecialchars()`, dan bebas dari syntax error (`php -l`). |
-| **J.620100.017.02** | Mengimplementasikan Pemrograman Terstruktur | File `src/helpers.php` memuat fungsi dengan tipe data ketat (`declare(strict_types=1)`), struktur kendali `if/else`, percabangan `switch`, perulangan `foreach`, dan penanganan error `try/catch`. |
-| **J.620100.018.02** | Mengimplementasikan Pemrograman Berorientasi Objek (OOP) | Kelas abstrak `BaseModel`, turunan `Pelanggan`, `Meja`, `Menu` (Inheritance & Overriding), enkapsulasi properti `private`/`protected` dengan getter-setter di `Pemesanan`, serta polimorfisme pada pemanggilan `simpan()`. |
-| **J.620100.019.02** | Menggunakan Library Pre-existing | Integrasi `dompdf/dompdf` untuk cetak laporan PDF, `phpunit/phpunit` untuk unit test, `Bootstrap 5` untuk UI responsif, dan `Flatpickr` (MIT, offline-ready) untuk date-time picker. Dilengkapi evaluasi lisensi dan kompatibilitas. |
-| **J.620100.021.02** | Menerapkan Akses Basis Data | Operasi CRUD lengkap dengan PDO prepared statements, relasi foreign key, indeks performa `idx_meja_waktu`, dan query multi-tabel JOIN di `LaporanService`. |
-| **J.620100.023.02** | Membuat Dokumentasi Kode Program | Seluruh berkas dilengkapi DocBlock standar (`@param`, `@return`, `@throws`), komentar pada logika perhitungan/validasi, dan `README.md` terstruktur. |
-| **J.620100.025.02** | Melakukan Debugging | Mengaktifkan error reporting, mekanisme logging ke `logs/app.log`, serta terdokumentasi 4 kasus investigasi bug (temuan &rarr; akar &rarr; perbaikan &rarr; verifikasi). |
-| **J.620100.033.02** | Melaksanakan Pengujian Unit Program | Pengujian otomatis 8 test case via PHPUnit mencakup skenario normal, skenario ekstrem, edge cases, dan merge duplikat dengan laporan hasil uji (15 assertions). |
+| **J.620100.009.01** | Menggunakan Spesifikasi Program | Kode mengacu persis pada PRD, ERD basis data, Use Case, Flowchart, dan Activity Diagram. |
+| **J.620100.016.01** | Menulis Kode Sesuai Guidelines & Best Practices | Standar PSR-12, sanitasi `htmlspecialchars()`, penamaan camelCase/PascalCase, bebas syntax error. |
+| **J.620100.017.02** | Mengimplementasikan Pemrograman Terstruktur | `src/helpers.php` memuat `declare(strict_types=1)`, seleksi `if/else`, perulangan `foreach`, `try/catch`. |
+| **J.620100.018.02** | Mengimplementasikan Pemrograman Berorientasi Objek (OOP) | Abstract Class `BaseModel`, inheritance `Pelanggan`, `Meja`, `Menu`, enkapsulasi `Pemesanan`, polimorfisme `simpan()`. |
+| **J.620100.019.02** | Menggunakan Library Pre-existing | Integrasi pustaka `dompdf/dompdf` (ekspor PDF), `phpunit/phpunit` (unit test), dan `Bootstrap 5` (UI responsif). |
+| **J.620100.021.02** | Menerapkan Akses Basis Data | PDO prepared statements (anti-SQL Injection), foreign key constraints, indeks `idx_meja_waktu`. |
+| **J.620100.023.02** | Membuat Dokumentasi Kode Program | DocBlock standar (`@param`, `@return`), komentar penjelasan alur validasi, dan `README.md` terstruktur. |
+| **J.620100.025.02** | Melakukan Debugging | Penanganan error `try-catch`, pencatatan log ke `logs/app.log`, dan dokumentasi 4 kasus analisis bug. |
+| **J.620100.033.02** | Melaksanakan Pengujian Unit Program | Eksekusi test suite PHPUnit 8 skenario pengujian dengan status 100% OK (15 assertions lolos). |
 
 ---
 
@@ -207,46 +241,45 @@ OK (8 tests, 15 assertions)
 
 | Nama Library | Fungsi dalam Aplikasi | Lisensi | Analisis Keuntungan vs Menulis Mandiri | Status & Kompatibilitas |
 | :--- | :--- | :--- | :--- | :--- |
-| **dompdf/dompdf** (v3.1.x) | Konversi dokumen HTML/CSS menjadi berkas PDF cetak | LGPL-2.1 | Menulis PDF renderer sendiri dari nol membutuhkan waktu berminggu-minggu dan sangat kompleks dalam kalkulasi font dan layout. Dompdf mempermudah styling menggunakan CSS. | **Aktif**, aman digunakan, kompatibel dengan PHP 8.4. |
-| **phpunit/phpunit** (v11.5.x) | Framework pengujian unit otomatis (*unit testing*) | BSD-3-Clause | Standar industri pengujian PHP. Menyediakan test runner, assertions lengkap, dan reporting tanpa perlu membangun test harness manual. | **Aktif**, versi stabil resmi, kompatibel dengan PHP 8.4. |
-| **Bootstrap 5** (v5.3.x) | Framework antarmuka pengguna (CSS & JS) | MIT | Menghemat waktu pembuatan tata letak responsif, sistem grid, form, tabel, dan komponen UI yang konsisten dan rapi. | **Aktif**, standar industri web frontend modern. |
-| **Flatpickr** (v4.6.13) | Date & time picker interaktif pada form pemesanan | MIT | Date picker bawaan browser tidak konsisten antarpltaform. Flatpickr menyediakan UX seragam, keyboard-typable, offline tanpa CDN eksternal. | **Aktif**, aman, kompatibel semua peramban modern. |
+| **dompdf/dompdf** (v3.1.x) | Konversi dokumen HTML/CSS menjadi berkas PDF cetak | LGPL-2.1 | Menulis PDF renderer sendiri dari nol sangat kompleks dalam tata letak font dan margin. Dompdf mempermudah styling menggunakan CSS standar. | **Aktif**, stabil, kompatibel PHP 8.4. |
+| **phpunit/phpunit** (v11.5.x) | Framework pengujian unit otomatis (*unit testing*) | BSD-3-Clause | Standar industri pengujian PHP. Menyediakan assertions lengkap dan reporting tanpa perlu membuat test runner manual. | **Aktif**, versi stabil resmi. |
+| **Bootstrap 5** (v5.3.x) | Framework antarmuka pengguna (CSS & JS) | MIT | Mempercepat pembuatan tata letak responsif, sistem grid, modal interaktif, dan komponen UI modern yang konsisten. | **Aktif**, standar industri web. |
 
 ---
 
 ## 8. Catatan Kasus Debugging (Unit J.620100.025.02)
 
-Berikut adalah 4 kasus bug nyata yang ditemukan, dianalisis, dan diperbaiki selama siklus pengembangan aplikasi:
+Berikut adalah 4 kasus bug nyata yang dianalisis dan diperbaiki selama pengembangan:
 
 ### Kasus Bug #1: Total Pemesanan Bernilai Null Saat Pesanan Belum Memiliki Menu
-- **Temuan**: Saat reservasi baru dibuat tanpa item makanan/minuman, kolom `total` pada database bernilai `NULL`, menyebabkan fungsi `format_rupiah()` memunculkan *warning deprecated* di PHP 8.4 karena menerima nilai null.
-- **Akar Masalah**: Fungsi agregat SQL `SUM(subtotal)` mengembalikan `NULL` apabila tidak ada baris yang cocok di tabel `detail_pesanan`.
-- **Perbaikan**: Menggunakan fungsi SQL `COALESCE(SUM(subtotal), 0)` pada query perhitungan total di `Pemesanan::updateTotalPemesanan()`, dan memberikan nilai default `0.0` pada properti model.
-- **Verifikasi**: Reservasi baru yang belum memiliki item menu otomatis memiliki total `Rp 0` tanpa ada pesan error/warning PHP.
+- **Temuan**: Saat reservasi baru dibuat tanpa item makanan/minuman, kolom `total` pada database bernilai `NULL`, memicu warning deprecated PHP 8.4 pada `format_rupiah()`.
+- **Akar Masalah**: Fungsi agregat SQL `SUM(subtotal)` menghasilkan `NULL` jika belum ada baris di tabel `detail_pesanan`.
+- **Perbaikan**: Menggunakan klausa SQL `COALESCE(SUM(subtotal), 0)` pada method `Pemesanan::updateTotalPemesanan()`.
+- **Verifikasi**: Reservasi baru yang belum memiliki menu otomatis memiliki grand total `Rp 0` tanpa warning.
 
 ### Kasus Bug #2: Meja Terdeteksi Bentrok dengan Pemesanan yang Berstatus Dibatalkan
-- **Temuan**: Pelanggan tidak dapat memesan Meja 2 pada jam tertentu padahal pemesanan sebelumnya di meja tersebut sudah berstatus "Dibatalkan".
-- **Akar Masalah**: Query pada method `cekBentrok()` semula hanya memeriksa `WHERE meja_id = :meja_id AND waktu_pesan = :waktu_pesan` tanpa menyaring status reservasi.
-- **Perbaikan**: Menambahkan klausa `AND status != 'Dibatalkan'` ke dalam query `cekBentrok()`.
-- **Verifikasi**: Meja yang reservasi sebelumnya telah dibatalkan kini dapat dipesan kembali oleh pelanggan lain dengan sukses.
+- **Temuan**: Pelanggan tidak bisa memesan meja pada jam tertentu karena ada reservasi lama yang sudah dibatalkan di jam yang sama.
+- **Akar Masalah**: Query `cekBentrok()` semula tidak menyaring status reservasi.
+- **Perbaikan**: Menambahkan klausa `AND status != 'Dibatalkan'` ke dalam kueri PDO prepared statement.
+- **Verifikasi**: Meja yang reservasinya telah dibatalkan kini dapat langsung dipesan kembali.
 
 ### Kasus Bug #3: Karakter Khusus pada Input Pelanggan Menyebabkan Kerentanan XSS
-- **Temuan**: Input nama pelanggan yang mengandung tag `<script>` atau tanda kutip dieksekusi oleh browser saat ditampilkan pada tabel dashboard.
-- **Akar Masalah**: Variabel langsung dicetak ke HTML tanpa sanitasi karakter entitas HTML.
-- **Perbaikan**: Mengimplementasikan `htmlspecialchars($trimmed, ENT_QUOTES, 'UTF-8')` pada fungsi `validasi_input()` di `helpers.php` dan pada setiap output tabel di view.
-- **Verifikasi**: Input `<script>alert('test')</script>` ditampilkan sebagai teks biasa yang aman dan tidak mengeksekusi script apapun.
+- **Temuan**: Input nama pelanggan yang mengandung script HTML/JavaScript dieksekusi oleh peramban.
+- **Akar Masalah**: Variabel langsung dicetak tanpa proses enkoding entitas HTML.
+- **Perbaikan**: Mengimplementasikan `htmlspecialchars($trimmed, ENT_QUOTES, 'UTF-8')` pada fungsi `validasi_input()` dan setiap rendering view.
+- **Verifikasi**: Input `<script>alert('test')</script>` aman ditampilkan sebagai teks biasa tanpa dieksekusi.
 
 ### Kasus Bug #4: Duplikasi Baris Item Menu yang Sama pada Pesanan
-- **Temuan**: Menambahkan menu yang sama lebih dari sekali pada satu pemesanan menghasilkan baris baru yang terpisah di tabel `detail_pesanan`, alih-alih menjumlahkan kuantitasnya.
-- **Akar Masalah**: Query `INSERT INTO detail_pesanan` pada method `tambahItem()` selalu membuat baris baru tanpa memverifikasi apakah `menu_id` yang sama sudah ada untuk `pemesanan_id` tersebut.
-- **Perbaikan**: Mengimplementasikan logika merge/upsert di `Pemesanan::tambahItem()` — jika `menu_id` sudah ada, kuantitas dan subtotal di-UPDATE; jika belum ada, baru di-INSERT.
-- **Verifikasi**: Menambah menu "Nasi Goreng" ke reservasi yang sudah memilikinya otomatis menaikkan kuantitas menjadi 2, tanpa membuat baris duplikat.
+- **Temuan**: Menambahkan item menu yang sama berulang kali menghasilkan baris terpisah pada tabel rincian pesanan.
+- **Akar Masalah**: Query selalu menjalankan `INSERT INTO detail_pesanan` tanpa pengecekan keberadaan menu yang sama.
+- **Perbaikan**: Mengimplementasikan logika merge di `Pemesanan::tambahItem()` — jika menu sudah ada, sistem meng-UPDATE kuantitas dan subtotal; jika belum ada, sistem melakukan INSERT.
+- **Verifikasi**: Menambahkan item "Nasi Goreng" ke pesanan yang sudah memuatnya otomatis menaikkan kuantitas tanpa duplikasi baris.
 
 ---
 
 ## 9. Contoh Demonstrasi OOP (Polymorphism & Overriding)
 
-Berikut contoh kode pembuktian konsep **Polymorphism** yang dapat didemonstrasikan di hadapan Asesor:
+Contoh pembuktian konsep **Polymorphism** pada method `simpan()` yang dapat didemonstrasikan di hadapan Asesor:
 
 ```php
 use App\BaseModel;
@@ -262,10 +295,32 @@ $daftarObjek = [
     new Menu("Kopi Tubruk", 10000.0)
 ];
 
-// Eksekusi polimorfisme: memanggil method simpan() pada tipe berbeda
+// Eksekusi polimorfisme: memanggil method simpan() pada tipe objek berbeda
 foreach ($daftarObjek as $obj) {
-    // PHP secara dinamis menjalankan implementasi simpan() milik masing-masing child class
+    // PHP secara dinamis mengeksekusi implementasi simpan() milik masing-masing child class
     $berhasil = $obj->simpan();
     echo get_class($obj) . " disimpan: " . ($berhasil ? "SUKSES" : "GAGAL") . "\n";
 }
 ```
+
+---
+
+## 10. Daftar Tangkapan Layar & Dokumentasi Sistem (Screenshots)
+
+Seluruh 13 bukti visual antarmuka dan pengujian perangkat lunak telah dirangkum dalam dokumen resmi [**`berkas_bnsp/Lampiran_Tangkapan_Layar_Sistem.docx`**](file:///Users/favian/Proyek%20/sertifikasi%20bnsp/berkas_bnsp/Lampiran_Tangkapan_Layar_Sistem.docx) dengan rincian:
+
+| No. Label | Berkas Gambar | Nama Tampilan / Bukti | Unit Kompetensi BNSP |
+| :---: | :--- | :--- | :--- |
+| **Gambar L.1** | `01_dashboard.png` | Dashboard Utama & Statistik Operasional | J.620100.017.02 & J.620100.019.02 |
+| **Gambar L.2** | `02_kelola_meja.png` | Antarmuka Pengelolaan Master Meja Restoran (CRUD) | J.620100.016.01 & J.620100.017.02 |
+| **Gambar L.3** | `03_kelola_menu.png` | Antarmuka Pengelolaan Katalog Menu & Stok (CRUD) | J.620100.017.02 |
+| **Gambar L.4** | `04_kelola_pelanggan.png` | Antarmuka Master Pelanggan & Informasi Kontak | J.620100.017.02 |
+| **Gambar L.5** | `05_daftar_pemesanan.png` | Monitoring Transaksi Pemesanan & Reservasi Meja | J.620100.017.02 & J.620100.020.02 |
+| **Gambar L.6** | `08_modal_validasi_kapasitas.png` | **Activity Diagram Tahap 1**: Peringatan Kapasitas Kurang (Tombol Disabled) | J.620100.009.01 & J.620100.017.02 |
+| **Gambar L.7** | `09_modal_jadwal_tersedia.png` | **Activity Diagram Tahap 2**: Kapasitas Cukup & Jadwal Bebas Bentrok (Siap Simpan) | J.620100.009.01 & J.620100.020.02 |
+| **Gambar L.8** | `06_detail_pesanan.png` | Rincian Pesanan Menu, Subtotal Otomatis, & Update Status | J.620100.016.01 & J.620100.020.02 |
+| **Gambar L.9** | `07_laporan_transaksi.png` | Modul Laporan Transaksi & Filter Rentang Tanggal | J.620100.017.02 & J.620100.020.02 |
+| **Gambar L.10** | `10_hasil_laporan_pdf.png` | Dokumen Resmi Ekspor PDF Standar Dompdf A4 | J.620100.017.02 & J.620100.019.02 |
+| **Gambar L.11** | `11_terminal_phpunit.png` | Eksekusi Unit Testing Otomatis PHPUnit (8/8 Lulus 100%) | J.620100.023.02 |
+| **Gambar L.12** | `12_terminal_php_lint.png` | Pemeriksaan Sintaksis Statis Kode PHP (PHP Lint Zero Error) | J.620100.025.02 |
+| **Gambar L.13** | `13_database_struktur_tabel.png` | Verifikasi Skema 5 Tabel Relasional & Indeks Komposit MySQL | J.620100.016.01 & J.620100.020.02 |
