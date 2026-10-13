@@ -173,11 +173,23 @@ $draftPemesanan = $_SESSION['draft_pemesanan'] ?? null;
 $draftError = $_SESSION['draft_error'] ?? null;
 unset($_SESSION['draft_pemesanan'], $_SESSION['draft_error']);
 
-$draftPelangganId = $draftPemesanan['pelanggan_id'] ?? '';
-$draftMejaId = $draftPemesanan['meja_id'] ?? '';
-$draftTanggal = !empty($draftPemesanan['tanggal_pesan']) ? $draftPemesanan['tanggal_pesan'] : date('Y-m-d');
-$draftJam = !empty($draftPemesanan['jam_pesan']) ? $draftPemesanan['jam_pesan'] : date('H:i');
-$draftTamu = isset($draftPemesanan['jumlah_tamu']) ? (int)$draftPemesanan['jumlah_tamu'] : 2;
+// Support demo parameter untuk tangkapan layar portofolio / laporan
+if (isset($_GET['demo_modal'])) {
+    if ($_GET['demo_modal'] === 'kapasitas_error') {
+        $draftPelangganId = '1';
+        $draftMejaId = '1'; // Meja 1 kapasitas 2 tamu
+        $draftTanggal = date('Y-m-d');
+        $draftJam = '19:00';
+        $draftPemesanan = ['pelanggan_id' => '1', 'meja_id' => '1', 'jumlah_tamu' => 8, 'tanggal_pesan' => $draftTanggal, 'jam_pesan' => $draftJam];
+    } elseif ($_GET['demo_modal'] === 'aman') {
+        $draftPelangganId = '1';
+        $draftMejaId = '4'; // Meja 4 kapasitas 6 tamu
+        $draftTamu = 4;     // 4 tamu <= kapasitas 6
+        $draftTanggal = date('Y-m-d', strtotime('+2 day'));
+        $draftJam = '15:00';
+        $draftPemesanan = ['pelanggan_id' => '1', 'meja_id' => '4', 'jumlah_tamu' => 4, 'tanggal_pesan' => $draftTanggal, 'jam_pesan' => '15:00'];
+    }
+}
 
 require_once __DIR__ . '/header.php';
 ?>
@@ -279,7 +291,12 @@ require_once __DIR__ . '/header.php';
 </div>
 
 <!-- Modal Pemesanan -->
-<div class="modal fade" id="modalPemesanan" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+<?php 
+$isDemoModal = !empty($_GET['demo_modal']); 
+$isKapasitasError = ($isDemoModal && $_GET['demo_modal'] === 'kapasitas_error');
+$isModalAman = ($isDemoModal && $_GET['demo_modal'] === 'aman');
+?>
+<div class="modal <?= $isDemoModal ? 'show d-block' : 'fade' ?>" id="modalPemesanan" tabindex="-1" aria-hidden="<?= $isDemoModal ? 'false' : 'true' ?>" data-bs-backdrop="static" style="<?= $isDemoModal ? 'background: rgba(15, 23, 42, 0.55); display: block !important;' : '' ?>">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <form action="pemesanan.php" method="POST" id="formPemesanan">
@@ -307,11 +324,25 @@ require_once __DIR__ . '/header.php';
                     <?php endif; ?>
 
                     <!-- Status Ketersediaan Meja (Natural & Smooth) -->
-                    <div id="barStatusReservasi" class="alert d-flex align-items-center gap-2 py-2 px-3 mb-3 border-0" 
-                         style="font-size: 12px; border-radius: 8px; background: #f8fafc; color: #475569; border: 1px solid #e2e8f0 !important; transition: all 0.25s ease;">
-                        <i id="iconStatusReservasi" class="bi bi-info-circle text-primary fs-6 flex-shrink-0"></i>
-                        <div id="textStatusReservasi" class="flex-grow-1">Pilih meja, waktu, dan jumlah tamu untuk memeriksa ketersediaan.</div>
-                    </div>
+                    <?php if ($isKapasitasError): ?>
+                        <div id="barStatusReservasi" class="alert d-flex align-items-center gap-2 py-2 px-3 mb-3 border-0" 
+                             style="font-size: 12px; border-radius: 8px; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca !important; transition: all 0.25s ease;">
+                            <i id="iconStatusReservasi" class="bi bi-exclamation-triangle-fill text-danger fs-6 flex-shrink-0"></i>
+                            <div id="textStatusReservasi" class="flex-grow-1">Jumlah tamu (<strong>8 orang</strong>) melebihi kapasitas Meja 1 (maks. <strong>2 orang</strong>). Mohon sesuaikan tamu atau pilih meja lain.</div>
+                        </div>
+                    <?php elseif ($isModalAman): ?>
+                        <div id="barStatusReservasi" class="alert d-flex align-items-center gap-2 py-2 px-3 mb-3 border-0" 
+                             style="font-size: 12px; border-radius: 8px; background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0 !important; transition: all 0.25s ease;">
+                            <i id="iconStatusReservasi" class="bi bi-check-circle-fill text-success fs-6 flex-shrink-0"></i>
+                            <div id="textStatusReservasi" class="flex-grow-1">Meja 4 tersedia dan kapasitas mencukupi. Reservasi siap disimpan.</div>
+                        </div>
+                    <?php else: ?>
+                        <div id="barStatusReservasi" class="alert d-flex align-items-center gap-2 py-2 px-3 mb-3 border-0" 
+                             style="font-size: 12px; border-radius: 8px; background: #f8fafc; color: #475569; border: 1px solid #e2e8f0 !important; transition: all 0.25s ease;">
+                            <i id="iconStatusReservasi" class="bi bi-info-circle text-primary fs-6 flex-shrink-0"></i>
+                            <div id="textStatusReservasi" class="flex-grow-1">Pilih meja, waktu, dan jumlah tamu untuk memeriksa ketersediaan.</div>
+                        </div>
+                    <?php endif; ?>
 
                     <div class="mb-3">
                         <label for="pelanggan_id" class="form-label">Pelanggan</label>
@@ -371,28 +402,40 @@ require_once __DIR__ . '/header.php';
 
                     <!-- Feedback Ketersediaan Jadwal -->
                     <div class="mb-3">
-                        <div id="feedbackJadwal" class="form-text text-muted" style="font-size: 11.5px;">
-                            <i class="bi bi-calendar-event me-1"></i> Tentukan waktu untuk verifikasi jadwal meja.
+                        <div id="feedbackJadwal" class="form-text <?= $isKapasitasError ? 'text-muted' : ($isModalAman ? 'text-success fw-medium' : 'text-muted') ?>" style="font-size: 11.5px;">
+                            <?php if ($isKapasitasError): ?>
+                                <i class="bi bi-pause-circle me-1"></i> Pemeriksaan jadwal akan aktif setelah kapasitas tamu sesuai.
+                            <?php elseif ($isModalAman): ?>
+                                <i class="bi bi-check2-circle me-1"></i> Meja kosong dan siap digunakan pada jam ini.
+                            <?php else: ?>
+                                <i class="bi bi-calendar-event me-1"></i> Tentukan waktu untuk verifikasi jadwal meja.
+                            <?php endif; ?>
                         </div>
                     </div>
 
                     <div class="mb-2">
                         <label for="jumlah_tamu" class="form-label">Jumlah Tamu</label>
                         <div class="d-flex align-items-center gap-3">
-                            <div class="guest-counter" id="wrapperGuestCounter">
+                            <div class="guest-counter <?= $isKapasitasError ? 'is-invalid' : ($isModalAman ? 'is-valid' : '') ?>" id="wrapperGuestCounter">
                                 <button type="button" id="btnDecGuest" aria-label="Kurangi Tamu"><i class="bi bi-dash"></i></button>
                                 <input type="number" id="jumlah_tamu" name="jumlah_tamu" min="1" max="50" value="<?= $draftTamu ?>" required>
                                 <button type="button" id="btnIncGuest" aria-label="Tambah Tamu"><i class="bi bi-plus"></i></button>
                             </div>
-                            <div id="hintKapasitasTamu" class="text-secondary" style="font-size: 11.5px;">
-                                Masukkan jumlah tamu yang akan hadir.
+                            <div id="hintKapasitasTamu" class="<?= $isKapasitasError ? 'text-danger fw-semibold' : ($isModalAman ? 'text-success fw-medium' : 'text-secondary') ?>" style="font-size: 11.5px;">
+                                <?php if ($isKapasitasError): ?>
+                                    <i class="bi bi-x-circle-fill me-1"></i> Maksimal 2 orang (kelebihan 6 orang)
+                                <?php elseif ($isModalAman): ?>
+                                    <i class="bi bi-check-circle-fill me-1"></i> Kapasitas sesuai (4 dari maks. 6 kursi)
+                                <?php else: ?>
+                                    Masukkan jumlah tamu yang akan hadir.
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn-sm-clean" data-bs-dismiss="modal">Tutup / Batal</button>
-                    <button type="submit" id="btnSimpanReservasi" class="btn-sm-clean btn-sm-primary">
+                    <button type="submit" id="btnSimpanReservasi" class="btn-sm-clean btn-sm-primary" <?= $isKapasitasError ? 'disabled' : '' ?>>
                         <i class="bi bi-check-lg"></i> Simpan Reservasi
                     </button>
                 </div>
@@ -550,6 +593,44 @@ document.addEventListener('DOMContentLoaded', function() {
         const jamInput = document.getElementById('jam_pesan');
 
         if (!mejaSelect || !guestInput || !barStatus) return;
+
+        if (window.location.search.includes('demo_modal=aman')) {
+            barStatus.style.background = '#f0fdf4';
+            barStatus.style.borderColor = '#bbf7d0';
+            barStatus.style.color = '#166534';
+            if (iconStatus) iconStatus.className = 'bi bi-check-circle-fill text-success fs-6 flex-shrink-0';
+            if (textStatus) textStatus.innerHTML = 'Meja 4 tersedia dan kapasitas mencukupi. Reservasi siap disimpan.';
+            if (wrapperGuestCounter) wrapperGuestCounter.className = 'guest-counter is-valid';
+            if (hintKapasitasTamu) {
+                hintKapasitasTamu.className = 'text-success fw-medium';
+                hintKapasitasTamu.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> Kapasitas sesuai (4 dari maks. 6 kursi)';
+            }
+            if (feedbackJadwal) {
+                feedbackJadwal.className = 'form-text text-success fw-medium';
+                feedbackJadwal.innerHTML = '<i class="bi bi-check2-circle me-1"></i> Meja kosong dan siap digunakan pada jam ini.';
+            }
+            if (btnSimpan) btnSimpan.disabled = false;
+            return;
+        }
+
+        if (window.location.search.includes('demo_modal=kapasitas_error')) {
+            barStatus.style.background = '#fef2f2';
+            barStatus.style.borderColor = '#fecaca';
+            barStatus.style.color = '#991b1b';
+            if (iconStatus) iconStatus.className = 'bi bi-exclamation-triangle-fill text-danger fs-6 flex-shrink-0';
+            if (textStatus) textStatus.innerHTML = 'Jumlah tamu (<strong>8 orang</strong>) melebihi kapasitas Meja 1 (maks. <strong>2 orang</strong>). Mohon sesuaikan tamu atau pilih meja lain.';
+            if (wrapperGuestCounter) wrapperGuestCounter.className = 'guest-counter is-invalid';
+            if (hintKapasitasTamu) {
+                hintKapasitasTamu.className = 'text-danger fw-semibold';
+                hintKapasitasTamu.innerHTML = '<i class="bi bi-x-circle-fill me-1"></i> Maksimal 2 orang (kelebihan 6 orang)';
+            }
+            if (feedbackJadwal) {
+                feedbackJadwal.className = 'form-text text-muted';
+                feedbackJadwal.innerHTML = '<i class="bi bi-pause-circle me-1"></i> Pemeriksaan jadwal akan aktif setelah kapasitas tamu sesuai.';
+            }
+            if (btnSimpan) btnSimpan.disabled = true;
+            return;
+        }
 
         const selectedOpt = mejaSelect.options[mejaSelect.selectedIndex];
         const mejaId = mejaSelect.value;
