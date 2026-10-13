@@ -1,0 +1,24 @@
+# Berkas Sertifikasi & Dokumentasi Internal (Diminta Masuk .gitignore)
+berkas_bnsp/
+docs/
+scripts/
+
+# Composer Dependencies
+vendor/
+
+# PHPUnit Cache
+.phpunit.cache/
+
+# Runtime Application Logs
+logs/*.log
+!logs/.gitkeep
+
+# macOS System Files
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Microsoft Office Temporary Lock Files
+~$*.docx
+~$*.pptx
+~$*.xlsx
