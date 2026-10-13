@@ -23,6 +23,11 @@ Sistem dimodelkan secara visual mencakup relasi basis data, arsitektur kelas OOP
 
 ### 2.1 Entity Relationship Diagram (ERD Basis Data)
 Ternormalisasi 3NF dengan 5 tabel relasional pada MySQL InnoDB:
+
+<p align="center">
+  <img src="screenshots/diagram_erd.png" alt="Entity Relationship Diagram (ERD)" width="750">
+</p>
+
 ```
 [pelanggan] (1) <─────── (N) [pemesanan] (1) <─────── (N) [detail_pesanan] (N) ───────> (1) [menu]
                                   │
@@ -38,6 +43,11 @@ Ternormalisasi 3NF dengan 5 tabel relasional pada MySQL InnoDB:
 
 ### 2.2 UML Class Diagram (Paradigma OOP)
 Penerapan Abstract Class `BaseModel`, Pewarisan (`Pelanggan`, `Meja`, `Menu`), Enkapsulasi `Pemesanan`, dan Singleton `Database`:
+
+<p align="center">
+  <img src="screenshots/diagram_class.png" alt="UML Class Diagram" width="650">
+</p>
+
 ```
                   ┌──────────────────────┐
                   │ <<abstract>>         │
@@ -53,6 +63,11 @@ Penerapan Abstract Class `BaseModel`, Pewarisan (`Pelanggan`, `Meja`, `Menu`), E
 
 ### 2.3 Flowchart Alur Reservasi & Validasi Terstruktur (J.620100.017.02)
 Alur transaksi sistem:
+
+<p align="center">
+  <img src="screenshots/diagram_flowchart.png" alt="Flowchart Alur Reservasi" width="550">
+</p>
+
 1. Mulai &rarr; Buka form reservasi meja.
 2. Input data pemesanan (Pelanggan, Meja, Tanggal/Waktu, Jumlah Tamu).
 3. **Pengecekan Kapasitas Tamu**: Apakah `jumlah_tamu <= kapasitas_meja`?
@@ -67,6 +82,11 @@ Alur transaksi sistem:
 
 ### 2.4 UML Use Case Diagram (Identifikasi Kebutuhan & Aktor)
 Mendefinisikan batasan sistem (*System Boundary*), dengan 1 aktor utama (**Staf Restoran**) yang memiliki akses pada 4 fungsi operasional:
+
+<p align="center">
+  <img src="screenshots/diagram_use_case.png" alt="UML Use Case Diagram" width="550">
+</p>
+
 1. **Catat Pesanan & Pembayaran**: Mencatat reservasi meja pelanggan, input pesanan hidangan, kalkulasi total otomatis, serta pencetakan bukti nota pembayaran.
 2. **Kelola Meja**: Melakukan operasi CRUD (Tambah, Ubah, Hapus) nomor meja dan kapasitas kursi tamu.
 3. **Kelola Menu & Stok**: Mengelola katalog makanan dan minuman, harga satuan (Rp), serta status ketersediaan stok (Tersedia / Habis).
@@ -74,6 +94,11 @@ Mendefinisikan batasan sistem (*System Boundary*), dengan 1 aktor utama (**Staf 
 
 ### 2.5 UML Activity Diagram (Alur Transaksi & Validasi Bertingkat)
 Memodelkan aktivitas lintas 3 swimlane (**Staf Restoran**, **Sistem RestoApp**, dan **Basis Data MySQL**):
+
+<p align="center">
+  <img src="screenshots/diagram_activity.png" alt="UML Activity Diagram" width="650">
+</p>
+
 - **Tahap 1 (Validasi Kapasitas)**: Memeriksa apakah jumlah tamu melebihi kapasitas meja (`validasiKapasitas()`). Jika melebihi, sistem secara reaktif menampilkan alert peringatan, border merah, dan mengunci tombol submit.
 - **Tahap 2 (Validasi Jadwal)**: Memeriksa bentrok waktu reservasi pada meja terpilih via kueri `WHERE meja_id = :meja_id AND waktu_pesan = :waktu_pesan AND status != 'Dibatalkan'`. Jika jadwal aman, badge hijau aktif dan tombol reservasi terbuka.
 - **Simpan & Rincian Pesanan**: Status awal dicatat `'Dipesan'`. Staf dapat menambahkan item menu dengan kalkulasi subtotal otomatis dan penggabungan kuantitas (*merge quantity*) jika menu yang sama ditambahkan berulang kali.
@@ -84,7 +109,7 @@ Memodelkan aktivitas lintas 3 swimlane (**Staf Restoran**, **Sistem RestoApp**, 
 
 ```
 restoran/
-├── berkas_bnsp/                # Berkas deliverable resmi sertifikasi BNSP
+├── berkas_bnsp/                # Berkas deliverable resmi sertifikasi BNSP (docx, pptx)
 │   ├── 1_Lampiran_Koding_Sistem_Pemesanan_Restoran.docx
 │   ├── 2_Laporan_Pengembangan_Sistem_Pemesanan_Restoran.docx
 │   ├── 3_Slide_Presentasi_Demonstrasi_BNSP.pptx
@@ -110,7 +135,12 @@ restoran/
 │   ├── pemesanan.php           # Buat reservasi meja & validasi 2 tahap (F-05, F-06)
 │   ├── detail_pesanan.php      # Tambah item menu ke pemesanan & hitung subtotal (F-07)
 │   └── laporan.php             # Laporan filter tanggal & export PDF via Dompdf (F-08)
-├── screenshots/                # 13 Bukti tangkapan layar antarmuka & pengujian sistem
+├── screenshots/                # Dokumentasi gambar diagram & tangkapan layar antarmuka
+│   ├── diagram_use_case.png
+│   ├── diagram_erd.png
+│   ├── diagram_flowchart.png
+│   ├── diagram_activity.png
+│   ├── diagram_class.png
 │   ├── 01_dashboard.png
 │   ├── 02_kelola_meja.png
 │   ├── 03_kelola_menu.png
@@ -187,19 +217,9 @@ Pengujian mencakup **8 skenario** sesuai spesifikasi PRD (kasus normal, edge cas
 ./vendor/bin/phpunit
 ```
 
-**Hasil Pengujian:**
-```text
-PHPUnit 11.5.57 by Sebastian Bergmann and contributors.
-
-Runtime:       PHP 8.4.23
-Configuration: /Users/favian/Proyek /sertifikasi bnsp/phpunit.xml
-
-........                                                            8 / 8 (100%)
-
-Time: 00:00.026, Memory: 8.00 MB
-
-OK (8 tests, 15 assertions)
-```
+<p align="center">
+  <img src="screenshots/11_terminal_phpunit.png" alt="Hasil PHPUnit" width="750">
+</p>
 
 | ID Uji | Target Fungsi | Skenario Uji | Hasil Diharapkan | Status |
 | :--- | :--- | :--- | :--- | :--- |
@@ -217,7 +237,10 @@ Memastikan seluruh berkas bebas syntax error:
 ```bash
 find src public -name "*.php" -exec php -l {} \;
 ```
-*Hasil: Seluruh berkas berstatus `No syntax errors detected` (Zero Error).*
+
+<p align="center">
+  <img src="screenshots/12_terminal_php_lint.png" alt="PHP Lint" width="750">
+</p>
 
 ---
 
@@ -305,22 +328,87 @@ foreach ($daftarObjek as $obj) {
 
 ---
 
-## 10. Daftar Tangkapan Layar & Dokumentasi Sistem (Screenshots)
+## 10. Dokumentasi Tangkapan Layar & Pengujian Sistem (Screenshots)
 
-Seluruh 13 bukti visual antarmuka dan pengujian perangkat lunak telah dirangkum dalam dokumen resmi [**`berkas_bnsp/Lampiran_Tangkapan_Layar_Sistem.docx`**](file:///Users/favian/Proyek%20/sertifikasi%20bnsp/berkas_bnsp/Lampiran_Tangkapan_Layar_Sistem.docx) dengan rincian:
+Berikut adalah dokumentasi visual dari implementasi antarmuka dan pembuktian logika sistem:
 
-| No. Label | Berkas Gambar | Nama Tampilan / Bukti | Unit Kompetensi BNSP |
-| :---: | :--- | :--- | :--- |
-| **Gambar L.1** | `01_dashboard.png` | Dashboard Utama & Statistik Operasional | J.620100.017.02 & J.620100.019.02 |
-| **Gambar L.2** | `02_kelola_meja.png` | Antarmuka Pengelolaan Master Meja Restoran (CRUD) | J.620100.016.01 & J.620100.017.02 |
-| **Gambar L.3** | `03_kelola_menu.png` | Antarmuka Pengelolaan Katalog Menu & Stok (CRUD) | J.620100.017.02 |
-| **Gambar L.4** | `04_kelola_pelanggan.png` | Antarmuka Master Pelanggan & Informasi Kontak | J.620100.017.02 |
-| **Gambar L.5** | `05_daftar_pemesanan.png` | Monitoring Transaksi Pemesanan & Reservasi Meja | J.620100.017.02 & J.620100.020.02 |
-| **Gambar L.6** | `08_modal_validasi_kapasitas.png` | **Activity Diagram Tahap 1**: Peringatan Kapasitas Kurang (Tombol Disabled) | J.620100.009.01 & J.620100.017.02 |
-| **Gambar L.7** | `09_modal_jadwal_tersedia.png` | **Activity Diagram Tahap 2**: Kapasitas Cukup & Jadwal Bebas Bentrok (Siap Simpan) | J.620100.009.01 & J.620100.020.02 |
-| **Gambar L.8** | `06_detail_pesanan.png` | Rincian Pesanan Menu, Subtotal Otomatis, & Update Status | J.620100.016.01 & J.620100.020.02 |
-| **Gambar L.9** | `07_laporan_transaksi.png` | Modul Laporan Transaksi & Filter Rentang Tanggal | J.620100.017.02 & J.620100.020.02 |
-| **Gambar L.10** | `10_hasil_laporan_pdf.png` | Dokumen Resmi Ekspor PDF Standar Dompdf A4 | J.620100.017.02 & J.620100.019.02 |
-| **Gambar L.11** | `11_terminal_phpunit.png` | Eksekusi Unit Testing Otomatis PHPUnit (8/8 Lulus 100%) | J.620100.023.02 |
-| **Gambar L.12** | `12_terminal_php_lint.png` | Pemeriksaan Sintaksis Statis Kode PHP (PHP Lint Zero Error) | J.620100.025.02 |
-| **Gambar L.13** | `13_database_struktur_tabel.png` | Verifikasi Skema 5 Tabel Relasional & Indeks Komposit MySQL | J.620100.016.01 & J.620100.020.02 |
+### 10.1 Modul Antarmuka Utama & Master Data (CRUD)
+
+#### Gambar L.1: Dashboard Utama & Statistik Operasional
+<p align="center">
+  <img src="screenshots/01_dashboard.png" alt="Dashboard Utama" width="800">
+</p>
+
+#### Gambar L.2: Antarmuka Pengelolaan Master Meja Restoran (CRUD)
+<p align="center">
+  <img src="screenshots/02_kelola_meja.png" alt="Kelola Meja" width="800">
+</p>
+
+#### Gambar L.3: Antarmuka Pengelolaan Katalog Menu & Stok (CRUD)
+<p align="center">
+  <img src="screenshots/03_kelola_menu.png" alt="Kelola Menu" width="800">
+</p>
+
+#### Gambar L.4: Antarmuka Master Pelanggan & Informasi Kontak (CRUD)
+<p align="center">
+  <img src="screenshots/04_kelola_pelanggan.png" alt="Kelola Pelanggan" width="800">
+</p>
+
+---
+
+### 10.2 Transaksi Reservasi & Pembuktian Logika Bisnis (Activity Diagram)
+
+#### Gambar L.5: Monitoring Transaksi Pemesanan & Reservasi Meja
+<p align="center">
+  <img src="screenshots/05_daftar_pemesanan.png" alt="Daftar Pemesanan" width="800">
+</p>
+
+#### Gambar L.6: Modal Validasi Tahap 1 — Deteksi & Peringatan Kapasitas Meja Kurang (Tombol Disabled)
+> **Bukti Activity Diagram Tahap 1 (Koreksi Kapasitas)**: Ketika tamu berjumlah 8 orang sedangkan Meja 1 hanya berkapasitas 2 orang, alert merah aktif dan tombol submit dinonaktifkan.
+<p align="center">
+  <img src="screenshots/08_modal_validasi_kapasitas.png" alt="Validasi Kapasitas Meja Kurang" width="800">
+</p>
+
+#### Gambar L.7: Modal Validasi Tahap 2 — Kapasitas Cukup & Jadwal Bebas Bentrok (Siap Simpan)
+> **Bukti Activity Diagram Tahap 2 (Kapasitas & Jadwal Lolos)**: Meja 4 (kapasitas 6) untuk 4 tamu lolos verifikasi kapasitas dan pengecekan jadwal bebas bentrok. Notifikasi hijau aktif dan tombol submit siap ditekan.
+<p align="center">
+  <img src="screenshots/09_modal_jadwal_tersedia.png" alt="Kapasitas Cukup dan Jadwal Bebas Bentrok" width="800">
+</p>
+
+#### Gambar L.8: Rincian Pesanan Menu, Subtotal Otomatis, & Update Status
+<p align="center">
+  <img src="screenshots/06_detail_pesanan.png" alt="Detail Pesanan" width="800">
+</p>
+
+---
+
+### 10.3 Laporan Rekapitulasi & Ekspor Dokumen Resmi PDF
+
+#### Gambar L.9: Modul Laporan Transaksi & Filter Rentang Tanggal
+<p align="center">
+  <img src="screenshots/07_laporan_transaksi.png" alt="Laporan Transaksi" width="800">
+</p>
+
+#### Gambar L.10: Dokumen Resmi Ekspor Laporan Transaksi Format PDF (Dompdf)
+<p align="center">
+  <img src="screenshots/10_hasil_laporan_pdf.png" alt="Ekspor Dokumen PDF" width="800">
+</p>
+
+---
+
+### 10.4 Pengujian Otomatis & Verifikasi Integritas Basis Data
+
+#### Gambar L.11: Hasil Eksekusi Unit Testing Otomatis (PHPUnit 100% OK)
+<p align="center">
+  <img src="screenshots/11_terminal_phpunit.png" alt="Eksekusi PHPUnit" width="800">
+</p>
+
+#### Gambar L.12: Pemeriksaan Sintaksis Statis Kode PHP (PHP Lint Zero Error)
+<p align="center">
+  <img src="screenshots/12_terminal_php_lint.png" alt="PHP Lint Syntax Check" width="800">
+</p>
+
+#### Gambar L.13: Verifikasi Skema 5 Tabel Relasional & Indeks Komposit MySQL
+<p align="center">
+  <img src="screenshots/13_database_struktur_tabel.png" alt="Struktur Basis Data MySQL" width="800">
+</p>
